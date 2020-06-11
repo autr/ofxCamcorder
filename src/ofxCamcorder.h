@@ -20,10 +20,12 @@ public:
     void threadedFunction();
 
     ofEvent<string> completeEvent;
+    
+    int _audioChannels, _audioSampleRate, _audioBufferSize;
+    string humanCmd;
 
-    bool setup(string fname, int w, int h, float fps, int sampleRate=0, int channels=0, bool sysClockSync=false, bool silent=false);
+    bool setup(string fname, int w, int h, float fps, ofSoundStreamSettings & soundSettings, bool sysClockSync=false, bool silent=false);
     bool setupCustomOutput(int w, int h, float fps, string outputString, bool sysClockSync=false, bool silent=false);
-    bool setupCustomOutput(int w, int h, float fps, int sampleRate, int channels, string outputString, bool sysClockSync=false, bool silent=false);
 
     bool addFrame(const ofPixels &pixels);
     void addAudioSamples(ofSoundBuffer& buffer);
@@ -67,7 +69,7 @@ private:
 
     // internal variables...
 
-    int width, height, sampleRate, audioChannels, audioBufferSize;
+    int width, height;
     float frameRate;
     
     // info variables...

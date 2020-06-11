@@ -84,7 +84,7 @@ void ofApp::keyReleased(int key){
     if(key=='r'){
         bRecording = !bRecording;
         if(bRecording && !rec.isInitialized()) {
-            rec.setup(fileName, grabber.getWidth(), grabber.getHeight(), 30, soundSettings.sampleRate, soundSettings.numInputChannels);
+            rec.setup(fileName, grabber.getWidth(), grabber.getHeight(), 30, soundSettings);
             rec.start();
         }
         else if(!bRecording && rec.isInitialized()) {
