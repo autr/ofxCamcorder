@@ -4,34 +4,58 @@
 
 ofxCamcorder::ofxCamcorder(){
     bIsInitialized = false;
-    pixelFormat = "rgb24";
-    outputPixelFormat = "";
     ctl.setPtr( this );
 }
 
 
 string ofxCamcorder::getInfoString() {
-
+    
+    int videoMillis = videoFramesRecorded / (int)ctl.fps * 1000;
+    int audioMillis = (_audioChannels > 0) ? (float)audioSamplesRecorded / (float)_audioSampleRate / (float)_audioChannels * 1000 : 0;
     
     stringstream ss;
     ss
-    << "video recorded: " << ofxCamcorderDefs::humanTimecode((videoFramesRecorded / frameRate)*1000) << endl
-    << "audio recorded: " << ofxCamcorderDefs::humanTimecode(((audioSamplesRecorded / frameRate)*1000)/audioBufferSize) << endl
-    << "video frames: " << frames.size() << "/" << videoFramesRecorded << endl
-    << "audio samples: " << audioFrames.size() << "/" << audioSamplesRecorded << endl
-    << "app FPS: " << ofGetFrameRate() << endl
-    ;
+    << "-------------------------------" << endl
+    << "video recorded: " << ofxCamcorderDefs::humanTimecode( videoMillis ) << endl
+    << "audio recorded: " << ofxCamcorderDefs::humanTimecode( audioMillis ) << endl
+    << "-------------------------------" << endl
+    << "video frames: "  << videoFramesRecorded << " (" << frames.size() << " buffered)" << endl
+    << "skipped / repeated: " << skippedFrames << " / " << repeatedFrames << endl
+    << "video settings: " << (string)ctl.videoCodec << "/" << (string)ctl.videoBitrate << "/" << (int)ctl.fps << endl
+    << "-------------------------------" << endl
+    << "audio samples: " << audioSamplesRecorded << " (" << audioFrames.size() << " buffered)" << endl
+    << "audio settings: "
+        << _audioSampleRate << "/" << _audioBufferSize << "/" << _audioChannels << " "
+        << (string)ctl.audioCodec << "/" << (string)ctl.audioBitrate << endl
+    << "-------------------------------" << endl
+    << "app FPS: " << (int)ofGetFrameRate() << endl
+    << "target FPS: " << (int)ctl.fps << endl
+    << "actual FPS: " << (int)actualFPS << endl
+    << "-------------------------------" << endl
+    << humanCmd << endl;
     return ss.str();
 }
 
 //--------------------------------------------------------------
-bool ofxCamcorder::setup(string fname, int w, int h, float fps, int sampleRate, int channels, bool sysClockSync, bool silent){
+bool ofxCamcorder::setup(string fname, int w, int h, ofSoundStreamSettings & soundSettings){
     if(bIsInitialized)
     {
         close();
     }
+    
+    _audioBufferSize = soundSettings.bufferSize;
+    _audioChannels = soundSettings.numInputChannels;
+    _audioSampleRate = soundSettings.sampleRate;
+    
+    _bIsSilent = (bool)ctl.silent;
+    _bSysClockSync = (bool)ctl.sync;
+    _fps = (int)ctl.fps;
+    
+    _inputFormat = (string)ctl.inputFormat;
+    _outputFormat = (string)ctl.outputFormat;
 
-    fileName = fname;
+    _fileName = (string)ctl.outputDir + (string)ctl.fileName;
+    _fullPath = ofFilePath::getAbsolutePath(_fileName);
 
     stringstream outputSettings;
     outputSettings
@@ -40,33 +64,25 @@ bool ofxCamcorder::setup(string fname, int w, int h, float fps, int sampleRate, 
     << " -b " << ctl.videoBitrate
     << " -acodec " << ctl.audioCodec
     << " -ab " << ctl.audioBitrate
-    << " \"" << ofFilePath::getAbsolutePath(fileName) << "\"";
+    << " \"" << _fullPath << "\"";
     
     ofLogNotice("ofxCamcorder") << "settings \"" << outputSettings.str() << "\" " << fname;
-    bool b = setupCustomOutput(w, h, fps, sampleRate, channels, outputSettings.str(), sysClockSync, silent);
+    bool b = setupCustomOutput(w, h, outputSettings.str());
     
     
     return b;
 }
 
 //--------------------------------------------------------------
-bool ofxCamcorder::setupCustomOutput(int w, int h, float fps, string outputString, bool sysClockSync, bool silent){
-    return setupCustomOutput(w, h, fps, 0, 0, outputString, sysClockSync, silent);
-}
-
-//--------------------------------------------------------------
-bool ofxCamcorder::setupCustomOutput(int w, int h, float fps, int sampleRate, int channels, string outputString, bool sysClockSync, bool silent){
+bool ofxCamcorder::setupCustomOutput(int w, int h, string outputString){
     if(bIsInitialized)
     {
         close();
     }
 
-    bIsSilent = silent;
-    bSysClockSync = sysClockSync;
-    audioBufferSize = 0;
 
-    bRecordAudio = (sampleRate > 0 && channels > 0);
-    bRecordVideo = (w > 0 && h > 0 && fps > 0);
+    bRecordAudio = (_audioSampleRate > 0 && _audioChannels > 0);
+    bRecordVideo = (w > 0 && h > 0 && _fps > 0);
     bFinishing = false;
 
     videoFramesRecorded = 0;
@@ -75,61 +91,77 @@ bool ofxCamcorder::setupCustomOutput(int w, int h, float fps, int sampleRate, in
     repeatedFrames = 0;
     skippedFrames = 0;
 
-    if(!bRecordVideo && !bRecordAudio) {
-        ofLogWarning() << "ofxCamcorder::setupCustomOutput(): invalid parameters, could not setup video or audio stream.\n"
-        << "video: " << w << "x" << h << "@" << fps << "fps\n"
-        << "audio: " << "channels: " << channels << " @ " << sampleRate << "Hz\n";
-        return false;
-    }
-    videoPipePath = "";
-    audioPipePath = "";
+    _videoPipePath = "";
+    _audioPipePath = "";
     pipeNumber = requestPipeNumber();
+    
+    string videoPipeStr = "ofxvrpipe" + ofToString(pipeNumber);
+    
     if(bRecordVideo) {
         width = w;
         height = h;
-        frameRate = fps;
 
         // recording video, create a FIFO pipe
-        videoPipePath = ofFilePath::getAbsolutePath("ofxvrpipe" + ofToString(pipeNumber));
-        if(!ofFile::doesFileExist(videoPipePath)){
-            string cmd = "bash --login -c 'mkfifo " + videoPipePath + "'";
+        _videoPipePath = ofFilePath::getAbsolutePath(videoPipeStr);
+        if(!ofFile::doesFileExist(_videoPipePath)){
+            string cmd = "bash --login -c 'mkfifo " + _videoPipePath + "'";
             system(cmd.c_str());
             // TODO: add windows compatable pipe creation (does ffmpeg work with windows pipes?)
         }
     }
-
+    
+    string audioPipeStr = "ofxarpipe" + ofToString(pipeNumber);
+    
     if(bRecordAudio) {
-        this->sampleRate = sampleRate;
-        audioChannels = channels;
 
         // recording video, create a FIFO pipe
-        audioPipePath = ofFilePath::getAbsolutePath("ofxarpipe" + ofToString(pipeNumber));
-        if(!ofFile::doesFileExist(audioPipePath)){
-            string cmd = "bash --login -c 'mkfifo " + audioPipePath + "'";
+        _audioPipePath = ofFilePath::getAbsolutePath(audioPipeStr);
+        if(!ofFile::doesFileExist(_audioPipePath)){
+            string cmd = "bash --login -c 'mkfifo " + _audioPipePath + "'";
             system(cmd.c_str());
 
             // TODO: add windows compatable pipe creation (does ffmpeg work with windows pipes?)
         }
     }
-
-    stringstream cmd;
+    
     // basic ffmpeg invocation, -y option overwrites output file
-    cmd << "bash --login -c '" << ctl.ffmpeg << (bIsSilent?" -loglevel quiet ":" ") << "-y";
+    stringstream cmd;
+    cmd << "bash --login -c '" << ctl.libraryPath << (_bIsSilent?" -loglevel quiet ":" ") << "-y";
     if(bRecordAudio){
-        cmd << " -acodec pcm_s16le -f s16le -ar " << sampleRate << " -ac " << audioChannels << " -i \"" << audioPipePath << "\"";
+        cmd << " -acodec pcm_s16le -f s16le -ar " << _audioSampleRate << " -ac " << _audioChannels << " -i \"" << _audioPipePath << "\"";
     }
     else { // no audio stream
         cmd << " -an";
     }
     if(bRecordVideo){ // video input options and file
-        cmd << " -r "<< fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat <<" -i \"" << videoPipePath << "\" -r " << fps;
-        if (outputPixelFormat.length() > 0)
-            cmd << " -pix_fmt " << outputPixelFormat;
+        cmd << " -r "<< _fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << _inputFormat <<" -i \"" << _videoPipePath << "\" -r " << _fps;
+        if (_outputFormat.length() > 0)
+            cmd << " -pix_fmt " << _outputFormat;
     }
     else { // no video stream
         cmd << " -vn";
     }
     cmd << " "+ outputString +"' &";
+    
+    // human readable...
+    
+    string human = cmd.str();
+    human = human.substr(17, human.size()-3-17);
+    ofStringReplace(human, "\""+_fullPath+"\"", "\n<outputPath>");
+    ofStringReplace(human, "\""+_videoPipePath+"\"", "<"+videoPipeStr+">");
+    ofStringReplace(human, "\""+_audioPipePath+"\"", "<"+audioPipeStr+">");
+    
+    ofLog() << "WHOLE STRING" << cmd.str();
+    
+    int i = 0;
+    humanCmd = "";
+    for(auto & flag : ofSplitString(human, "-")) humanCmd += ((i++==0) ? "" : "-") + flag + "\n";
+    
+    ofLogNotice("ofxCamcorder")
+    << "sending cmd string..." << endl
+    << "-------------------------------" << endl
+    << humanCmd << endl
+    << "-------------------------------" << endl;
 
     // start ffmpeg thread. Ffmpeg will wait for input pipes to be opened.
     ffmpegThread.setup(cmd.str());
@@ -140,10 +172,10 @@ bool ofxCamcorder::setupCustomOutput(int w, int h, float fps, int sampleRate, in
     }
 
     if(bRecordAudio){
-        audioThread.setup(audioPipePath, &audioFrames);
+        audioThread.setup(_audioPipePath, &audioFrames);
     }
     if(bRecordVideo){
-        videoThread.setup(videoPipePath, &frames);
+        videoThread.setup(_videoPipePath, &frames);
     }
 
     bIsInitialized = true;
@@ -165,35 +197,35 @@ bool ofxCamcorder::addFrame(const ofPixels &pixels){
     {
         int framesToAdd = 1; // default add one frame per request
 
-        if((bRecordAudio || bSysClockSync) && !bFinishing){
+        if((bRecordAudio || _bSysClockSync) && !bFinishing){
 
             double syncDelta;
-            double videoRecordedTime = videoFramesRecorded / frameRate;
+            double videoRecordedTime = videoFramesRecorded / _fps;
 
             if (bRecordAudio) {
                 // if also recording audio, check the overall recorded time for audio and video to make sure audio is not going out of sync
-                // this also handles incoming dynamic framerate while maintaining desired outgoing framerate
-                double audioRecordedTime = (audioSamplesRecorded/audioChannels)  / (double)sampleRate;
+                // this also handles incoming dynamic _fps while maintaining desired outgoing _fps
+                double audioRecordedTime = (audioSamplesRecorded/_audioChannels)  / (double)_audioSampleRate;
                 syncDelta = audioRecordedTime - videoRecordedTime;
             }
             else {
                 // if just recording video, synchronize the video against the system clock
-                // this also handles incoming dynamic framerate while maintaining desired outgoing framerate
+                // this also handles incoming dynamic _fps while maintaining desired outgoing _fps
                 syncDelta = systemClock() - videoRecordedTime;
             }
 
             int actualFPS = 1.0/syncDelta; 
 
-            if(syncDelta > 1.0/frameRate) {
+            if(syncDelta > 1.0/_fps) {
                 // not enought video frames, we need to send extra video frames.
-                while(syncDelta > 1.0/frameRate) {
+                while(syncDelta > 1.0/_fps) {
                     framesToAdd++;
                     repeatedFrames += 1;
-                    syncDelta -= 1.0/frameRate;
+                    syncDelta -= 1.0/_fps;
                 }
                 ofLogVerbose() << "ofxCamcorder: recDelta = " << syncDelta << ". Not enough video frames for desired frame rate, copied this frame " << framesToAdd << " times.\n";
             }
-            else if(syncDelta < -1.0/frameRate){
+            else if(syncDelta < -1.0/_fps){
                 // more than one video frame is waiting, skip this frame
                 framesToAdd = 0;
                 skippedFrames += 1;
@@ -225,8 +257,7 @@ void ofxCamcorder::addAudioSamples(ofSoundBuffer& buffer) {
         shortSamples->data = new short[size];
         shortSamples->size = size;
 
-        audioBufferSize = buffer.getNumFrames();
-        for(int i=0; i < audioBufferSize; i++){
+        for(int i=0; i < buffer.getNumFrames(); i++){
             for(int j=0; j < buffer.getNumChannels(); j++){
                 shortSamples->data[i * buffer.getNumChannels() + j] = (short) (buffer.getSample(i, j) * 32767.0f);
             }
@@ -276,51 +307,17 @@ void ofxCamcorder::setPaused(bool bPause){
 //--------------------------------------------------------------
 void ofxCamcorder::close(){
     if(!bIsInitialized) return;
-
     bIsRecording = false;
-
-    if(bRecordVideo && bRecordAudio) {
-        // set pipes to non_blocking so we dont get stuck at the final writes
-        // audioThread.setPipeNonBlocking();
-        // videoThread.setPipeNonBlocking();
-
-        if (frames.size() > 0 && audioFrames.size() > 0) {
-            // if there are frames in the queue start a thread to finalize the output file without blocking the app.
-            startThread();
-            return;
-        }
-    }
-    else if(bRecordVideo) {
-        // set pipes to non_blocking so we dont get stuck at the final writes
-        // videoThread.setPipeNonBlocking();
-
-        if (frames.size() > 0) {
-            // if there are frames in the queue start a thread to finalize the output file without blocking the app.
-            startThread();
-            return;
-        }
-        else {
-            // cout << "ofxCamcorder :: we are good to go!" << endl;
-        }
-
-    }
-    else if(bRecordAudio) {
-        // set pipes to non_blocking so we dont get stuck at the final writes
-        // audioThread.setPipeNonBlocking();
-
-        if (audioFrames.size() > 0) {
-            // if there are frames in the queue start a thread to finalize the output file without blocking the app.
-            startThread();
-            return;
-        }
-    }
-
-    outputFileComplete();
+    startThread();
+    waitForThread();
 }
 
 //--------------------------------------------------------------
 void ofxCamcorder::threadedFunction()
 {
+    
+    // cleanup function...
+    
     if(bRecordVideo && bRecordAudio) {
         while(frames.size() > 0 && audioFrames.size() > 0) {
             // if there are frames in the queue or the thread is writing, signal them until the work is done.
@@ -342,18 +339,7 @@ void ofxCamcorder::threadedFunction()
     }
 
     waitForThread();
-
-    outputFileComplete();
-}
-
-//--------------------------------------------------------------
-void ofxCamcorder::outputFileComplete()
-{
-    // at this point all data that ffmpeg wants should have been consumed
-    // one of the threads may still be trying to write a frame,
-    // but once close() gets called they will exit the non_blocking write loop
-    // and hopefully close successfully
-
+    
     bIsInitialized = false;
 
     if (bRecordVideo) {
@@ -366,9 +352,11 @@ void ofxCamcorder::outputFileComplete()
     retirePipeNumber(pipeNumber);
 
     ffmpegThread.waitForThread();
-    // TODO: kill ffmpeg process if its taking too long to close for whatever reason.
-
-    ofNotifyEvent(completeEvent, fileName);
+    
+    // wait before signalling (in case something tries to load the file)...
+    
+    sleep(500);
+    ofNotifyEvent(completeEvent, _fileName);
 }
 
 //--------------------------------------------------------------

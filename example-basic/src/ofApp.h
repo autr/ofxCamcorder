@@ -37,4 +37,6 @@ public:
 
     ofFbo recordFbo;
     ofPixels recordPixels;
+    
+    ofxPanel gui;
 };

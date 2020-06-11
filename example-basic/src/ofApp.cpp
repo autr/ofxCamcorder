@@ -10,7 +10,6 @@ void ofApp::setup(){
     grabber.setDesiredFrameRate(30);
     grabber.initGrabber(640, 480);
 
-    fileName = ofFilePath::getUserHomeDir() + "/Desktop/ofxCamcoderTest.mp4";
 
     auto devices = soundStream.getDeviceList();
     soundSettings.setInDevice(devices[0]);
@@ -23,6 +22,13 @@ void ofApp::setup(){
     
     bRecording = false;
     ofAddListener(rec.completeEvent, this, &ofApp::onRecordingComplete);
+    
+    rec.ctl.outputDir = ofFilePath::getUserHomeDir() + "/Desktop/";
+    rec.ctl.fileName = "ofxCamcoderTest.mp4";
+    play.load(ofFilePath::getUserHomeDir() + "/Desktop/" + "ofxCamcoderTest.mp4");
+    
+    gui.setup( rec.getGui() );
+    gui.setPosition( 700, 120 );
 }
 
 //--------------------------------------------------------------
@@ -33,6 +39,7 @@ void ofApp::exit(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
+    play.update();
     grabber.update();
     if(grabber.isFrameNew() && bRecording){
         bool success = rec.addFrame(grabber.getPixels());
@@ -54,7 +61,7 @@ void ofApp::update(){
 //--------------------------------------------------------------
 void ofApp::draw(){
     ofSetColor(255);
-    grabber.draw(0,0);
+    grabber.draw(120,40);
     ofDrawBitmapStringHighlight( rec.getInfoString(), 10, 10);
 
 
@@ -62,6 +69,9 @@ void ofApp::draw(){
     ofSetColor(255, 0, 0);
     ofDrawCircle(ofGetWidth() - 20, 20, 5);
     }
+    
+    play.draw(10, ofGetHeight()-250,320, 240);
+    gui.draw();
 }
 
 //--------------------------------------------------------------
@@ -71,7 +81,9 @@ void ofApp::audioIn( ofSoundBuffer & buffer ){
 
 //--------------------------------------------------------------
 void ofApp::onRecordingComplete(string & filename) {
-    ofLogNotice("example-basic") << "received completed recording event...";
+    ofLogNotice("example-basic") << "received completed recording event..." << filename;
+    play.load(filename);
+    ofLog() << "VIDEO!!!!";
 }
 
 //--------------------------------------------------------------
@@ -84,7 +96,8 @@ void ofApp::keyReleased(int key){
     if(key=='r'){
         bRecording = !bRecording;
         if(bRecording && !rec.isInitialized()) {
-            rec.setup(fileName, grabber.getWidth(), grabber.getHeight(), 30, soundSettings.sampleRate, soundSettings.numInputChannels);
+            play.close();
+            rec.setup(fileName, grabber.getWidth(), grabber.getHeight(), soundSettings);
             rec.start();
         }
         else if(!bRecording && rec.isInitialized()) {
