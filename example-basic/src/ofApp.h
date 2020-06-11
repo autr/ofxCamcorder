@@ -1,7 +1,8 @@
 #pragma once
 
 #include "ofMain.h"
-#include "ofxVideoRecorder.h"
+#include "ofxCamcorder.h"
+#include "ofxGui.h"
 
 class ofApp : public ofBaseApp{
 
@@ -22,16 +23,17 @@ public:
     void gotMessage(ofMessage msg);
     void audioIn(ofSoundBuffer& buffer);
 
-    ofVideoGrabber      vidGrabber;
-    ofxVideoRecorder    vidRecorder;
-    ofSoundStream       soundStream;
-    bool bRecording;
-    int sampleRate;
-    int channels;
+    ofSoundStreamSettings soundSettings;
+    ofSoundStream soundStream;
+    
+    ofVideoPlayer play;
+    ofVideoGrabber grabber;
+    ofxCamcorder rec;
+    
     string fileName;
-    string fileExt;
+    bool bRecording;
 
-    void recordingComplete(ofxVideoRecorderOutputFileCompleteEventArgs& args);
+    void onRecordingComplete(string & filename);
 
     ofFbo recordFbo;
     ofPixels recordPixels;
