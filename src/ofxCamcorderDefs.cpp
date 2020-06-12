@@ -1,9 +1,5 @@
 #include "ofxCamcorderDefs.h"
 
-
-
-
-
 ofxCamcorderDefs::execThread::execThread(){
     execCommand = "";
     initialized = false;

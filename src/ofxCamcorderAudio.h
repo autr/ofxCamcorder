@@ -3,10 +3,10 @@
 #include "ofxCamcorderDefs.h"
 #include "Poco/Condition.h"
 #include <set>
-//
-//#include <unistd.h>
-//#include <fcntl.h>
-//#include <sys/ioctl.h>
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 
 

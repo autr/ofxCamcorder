@@ -9,8 +9,6 @@
 #include "ofxCamcorderAudio.h"
 #include "ofxCamcorderCtl.h"
 
-
-
 class ofxCamcorder  : public ofThread
 {
 public:
@@ -25,7 +23,8 @@ public:
     
 
     bool setup(string fname, int w, int h, ofSoundStreamSettings & soundSettings);
-    bool setupCustomOutput(int w, int h, string outputString);
+    bool setupCustomOutput(int w, int h);
+    string getOutputCmdString();
 
     bool addFrame(const ofPixels &pixels);
     void addAudioSamples(ofSoundBuffer& buffer);
@@ -53,9 +52,10 @@ public:
     ofParameterGroup & getGui() { return ctl.ui; }
     void setOutputDirectory( string dir ) { ctl.outputDir = dir; }
     void setOutputFilename( string name ) { ctl.fileName = name; }
+    
 
 private:
-
+    void onParametersChanged( ofAbstractParameter & param );
     // GUI / external variables (locked during setup)...
     
     string _fileName;
@@ -66,7 +66,11 @@ private:
     float _fps;
     string _inputFormat, _outputFormat;
     string _videoPipePath, _audioPipePath;
+    string _videoCodec;
+    string _inputCmdStr, _outputCmdStr;
     
+    bool _bRecordAudio;
+    bool _bRecordVideo;
     
     string humanCmd;
     bool closeOnError;
@@ -79,15 +83,14 @@ private:
     
     // info variables...
     
-    int repeatedFrames, skippedFrames, actualFPS;
+    int repeatedFrames, skippedFrames, actualFPS, inputFPS;
+    float inputTimestamp;
 
 
     // internal status...
 
 
     bool bIsInitialized;
-    bool bRecordAudio;
-    bool bRecordVideo;
     bool bIsRecording;
     bool bIsPaused;
     bool bFinishing;

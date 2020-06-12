@@ -1,5 +1,8 @@
 #pragma once
 #include "ofMain.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 namespace ofxCamcorderDefs {
 

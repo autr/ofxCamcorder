@@ -8,7 +8,7 @@ void ofApp::setup(){
     ofSetLogLevel(OF_LOG_VERBOSE);
     
     grabber.setDesiredFrameRate(30);
-    grabber.initGrabber(640, 480);
+    grabber.initGrabber(1080, 1080);
 
 
     auto devices = soundStream.getDeviceList();
@@ -27,7 +27,7 @@ void ofApp::setup(){
     rec.ctl.outputDir = ofFilePath::getUserHomeDir() + "/Desktop/";
     rec.ctl.fileName = "ofxCamcoderTest.mp4";
     play.load(ofFilePath::getUserHomeDir() + "/Desktop/" + "ofxCamcoderTest.mp4");
-    
+    play.play();
     gui.setup( rec.getGui() );
     gui.setPosition( 700, 120 );
 }
@@ -40,17 +40,19 @@ void ofApp::exit(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
-    if (play.isLoaded() ) play.update();
-    grabber.update();
-    if(grabber.isFrameNew() && bRecording){
-        bool success = rec.addFrame(grabber.getPixels());
+    if (play.isLoaded() && !bRecording ) play.update();
+    if (bRecording) {
+        grabber.update();
+        if(grabber.isFrameNew() && bRecording){
+            bool success = rec.addFrame(grabber.getPixels());
+        }
     }
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
     ofSetColor(255);
-    grabber.draw(120,40);
+    if ( bRecording ) grabber.draw(120,40);
     ofDrawBitmapStringHighlight( rec.getInfoString(), 10, 10);
 
 
@@ -59,19 +61,20 @@ void ofApp::draw(){
     ofDrawCircle(ofGetWidth() - 20, 20, 5);
     }
     
-    if (play.isLoaded() ) play.draw(10, ofGetHeight()-250,320, 240);
+    if (play.isLoaded() && !bRecording ) play.draw(10, ofGetHeight()-250,320, 240);
     gui.draw();
 }
 
 //--------------------------------------------------------------
 void ofApp::audioIn( ofSoundBuffer & buffer ){
-    if(bRecording) rec.addAudioSamples( buffer );
+    if( bRecording ) rec.addAudioSamples( buffer );
 }
 
 //--------------------------------------------------------------
 void ofApp::onRecordingComplete(string & filename) {
     ofLogNotice("example-basic") << "received completed recording event..." << filename;
     play.load(filename);
+    play.play();
 }
 //--------------------------------------------------------------
 void ofApp::onRecordingError(string & error) {

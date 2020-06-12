@@ -1,9 +1,9 @@
 #include "ofxCamcorderFrame.h"
-//
-//#include <unistd.h>
-//#include <fcntl.h>
-//#include <set>
-//#include <sys/ioctl.h>
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <set>
+#include <sys/ioctl.h>
 
 ofxCamcorderFrame::ofxCamcorderFrame(){
 }

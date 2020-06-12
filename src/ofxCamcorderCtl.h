@@ -8,11 +8,13 @@ public:
     ofParameterGroup ui;
 
     ofParameter<string> libraryPath; // ffmpeg location
+    ofParameter<string> pipeDir;
     ofParameter<bool> record;
     ofParameter<bool> silent;
     ofParameter<string> outputDir;
     ofParameter<string> fileName;
     
+    ofParameter<int> preset; // 0 = custom, 1 = lossless
     ofParameter<string> inputFormat;
     ofParameter<string> outputFormat;
     
