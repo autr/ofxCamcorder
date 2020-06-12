@@ -56,6 +56,8 @@ bool ofxCamcorder::setup(string fname, int w, int h, ofSoundStreamSettings & sou
 
     _fileName = (string)ctl.outputDir + (string)ctl.fileName;
     _fullPath = ofFilePath::getAbsolutePath(_fileName);
+    
+    closeOnError = false;
 
     stringstream outputSettings;
     outputSettings
@@ -192,9 +194,17 @@ bool ofxCamcorder::setupCustomOutput(int w, int h, string outputString){
 //--------------------------------------------------------------
 bool ofxCamcorder::addFrame(const ofPixels &pixels){
     if (!bIsRecording || bIsPaused) return false;
+    
+    if (hasVideoError()) {
+        ofLogError("ofxCamcorder") << "closing after video error...";
+        bIsRecording = false;
+        closeOnError = true;
+        videoThread.close();
+        audioThread.close();
+        close();
+    }
 
-    if(bIsInitialized && bRecordVideo && ffmpegThread.isInitialized())
-    {
+    if(bIsInitialized && bRecordVideo && ffmpegThread.isInitialized()) {
         int framesToAdd = 1; // default add one frame per request
 
         if((bRecordAudio || _bSysClockSync) && !bFinishing){
@@ -214,7 +224,7 @@ bool ofxCamcorder::addFrame(const ofPixels &pixels){
                 syncDelta = systemClock() - videoRecordedTime;
             }
 
-            int actualFPS = 1.0/syncDelta; 
+            actualFPS = 1.0/syncDelta;
 
             if(syncDelta > 1.0/_fps) {
                 // not enought video frames, we need to send extra video frames.
@@ -223,13 +233,13 @@ bool ofxCamcorder::addFrame(const ofPixels &pixels){
                     repeatedFrames += 1;
                     syncDelta -= 1.0/_fps;
                 }
-                ofLogVerbose() << "ofxCamcorder: recDelta = " << syncDelta << ". Not enough video frames for desired frame rate, copied this frame " << framesToAdd << " times.\n";
+//                ofLogVerbose() << "ofxCamcorder: recDelta = " << syncDelta << ". Not enough video frames for desired frame rate, copied this frame " << framesToAdd << " times.\n";
             }
             else if(syncDelta < -1.0/_fps){
                 // more than one video frame is waiting, skip this frame
                 framesToAdd = 0;
                 skippedFrames += 1;
-                ofLogVerbose() << "ofxCamcorder: recDelta = " << syncDelta << ". Too many video frames, skipping.\n";
+//                ofLogVerbose() << "ofxCamcorder: recDelta = " << syncDelta << ". Too many video frames, skipping.\n";
             }
         }
 
@@ -250,6 +260,14 @@ bool ofxCamcorder::addFrame(const ofPixels &pixels){
 //--------------------------------------------------------------
 void ofxCamcorder::addAudioSamples(ofSoundBuffer& buffer) {
     if (!bIsRecording || bIsPaused) return;
+    if (hasAudioError()) {
+        ofLogError("ofxCamcorder") << "closing after audio error...";
+        bIsRecording = false;
+        closeOnError = true;
+        videoThread.close();
+        audioThread.close();
+        close();
+    }
 
     if(bIsInitialized && bRecordAudio){
         int size = buffer.getNumFrames() * buffer.getNumChannels();
@@ -307,6 +325,7 @@ void ofxCamcorder::setPaused(bool bPause){
 //--------------------------------------------------------------
 void ofxCamcorder::close(){
     if(!bIsInitialized) return;
+    ofLogNotice("ofxCamcorder") << "closing...";
     bIsRecording = false;
     startThread();
     waitForThread();
@@ -356,7 +375,12 @@ void ofxCamcorder::threadedFunction()
     // wait before signalling (in case something tries to load the file)...
     
     sleep(500);
-    ofNotifyEvent(completeEvent, _fileName);
+    if (closeOnError) {
+        string evt = "error recording...";
+        ofNotifyEvent(errorEvent, evt);
+    } else {
+        ofNotifyEvent(completeEvent, _fileName);
+    }
 }
 
 //--------------------------------------------------------------

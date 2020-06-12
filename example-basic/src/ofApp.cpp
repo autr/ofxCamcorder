@@ -22,6 +22,7 @@ void ofApp::setup(){
     
     bRecording = false;
     ofAddListener(rec.completeEvent, this, &ofApp::onRecordingComplete);
+    ofAddListener(rec.errorEvent, this, &ofApp::onRecordingError);
     
     rec.ctl.outputDir = ofFilePath::getUserHomeDir() + "/Desktop/";
     rec.ctl.fileName = "ofxCamcoderTest.mp4";
@@ -39,22 +40,10 @@ void ofApp::exit(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
-    play.update();
+    if (play.isLoaded() ) play.update();
     grabber.update();
     if(grabber.isFrameNew() && bRecording){
         bool success = rec.addFrame(grabber.getPixels());
-        if (!success) {
-            ofLogWarning("This frame was not added!");
-        }
-    }
-
-    // Check if the video recam encountered any error while writing video frame or audio smaples.
-    if (rec.hasVideoError()) {
-        ofLogWarning("The video recam failed to write some frames!");
-    }
-
-    if (rec.hasAudioError()) {
-        ofLogWarning("The video recam failed to write some audio samples!");
     }
 }
 
@@ -70,7 +59,7 @@ void ofApp::draw(){
     ofDrawCircle(ofGetWidth() - 20, 20, 5);
     }
     
-    play.draw(10, ofGetHeight()-250,320, 240);
+    if (play.isLoaded() ) play.draw(10, ofGetHeight()-250,320, 240);
     gui.draw();
 }
 
@@ -83,7 +72,10 @@ void ofApp::audioIn( ofSoundBuffer & buffer ){
 void ofApp::onRecordingComplete(string & filename) {
     ofLogNotice("example-basic") << "received completed recording event..." << filename;
     play.load(filename);
-    ofLog() << "VIDEO!!!!";
+}
+//--------------------------------------------------------------
+void ofApp::onRecordingError(string & error) {
+    ofLogError("example-basic") << "received recording error..." << error;
 }
 
 //--------------------------------------------------------------
@@ -109,7 +101,6 @@ void ofApp::keyReleased(int key){
     }
     if(key=='c'){
         bRecording = false;
-        ofLog() << "CLOSING";
         rec.close();
         
     }

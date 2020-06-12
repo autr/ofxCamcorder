@@ -32,8 +32,9 @@ public:
     
     string fileName;
     bool bRecording;
-
+    
     void onRecordingComplete(string & filename);
+    void onRecordingError(string & error);
 
     ofFbo recordFbo;
     ofPixels recordPixels;

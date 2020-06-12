@@ -3,6 +3,11 @@
 #include "ofxCamcorderDefs.h"
 #include "Poco/Condition.h"
 #include <set>
+//
+//#include <unistd.h>
+//#include <fcntl.h>
+//#include <sys/ioctl.h>
+
 
 
 class ofxCamcorderAudio : public ofThread {

@@ -4,6 +4,12 @@
 #include "Poco/Condition.h"
 #include <set>
 
+// new
+//#include <unistd.h>
+//#include <fcntl.h>
+//#include <sys/ioctl.h>
+
+
 
 class ofxCamcorderFrame : public ofThread {
 public:

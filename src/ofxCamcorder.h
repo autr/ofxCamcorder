@@ -19,8 +19,9 @@ public:
     ofxCamcorderCtl ctl;
 
     void threadedFunction();
-
+    
     ofEvent<string> completeEvent;
+    ofEvent<string> errorEvent;
     
 
     bool setup(string fname, int w, int h, ofSoundStreamSettings & soundSettings);
@@ -68,6 +69,7 @@ private:
     
     
     string humanCmd;
+    bool closeOnError;
     
 
 
